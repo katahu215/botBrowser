@@ -1,0 +1,54 @@
+{
+  "name": "bot",
+  "version": "1.0.5",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node compile.cjs && electron .",
+    "build": "node compile.cjs && electron-builder"
+  },
+  "keywords": [],
+  "devDependencies": {
+    "electron": "^45.0.0",
+    "electron-builder": "^26.15.3",
+    "javascript-obfuscator": "^5.9.0"
+  },
+  "build": {
+    "appId": "com.example.bot",
+    "productName": "LeagueHelper",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "index.js",
+      "main.jsc",
+      "services/**/*.jsc",
+      "services/**/*.cjs",
+      "preload.js",
+      "package.json",
+      "!bundle.js",
+      "!dist/**",
+      "!services/**/*.js"
+    ],
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://pbhelperskatan.duckdns.org:8443/bot/"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "dependencies": {
+    "bytenode": "^2.0.0",
+    "electron-log": "^5.4.4",
+    "electron-updater": "^6.8.9"
+  }
+}
