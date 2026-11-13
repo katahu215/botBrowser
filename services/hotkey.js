@@ -14,7 +14,7 @@ module.exports.hotkey = async (event, key) => {
 
     await sleep(120, 30);
     let keyString = String(key);
-    if (key === 100) keyString = "E";
+    if (key === 101) keyString = "E";
 
     try {
       webContents.sendInputEvent({ type: "keyDown", keyCode: "Alt" });

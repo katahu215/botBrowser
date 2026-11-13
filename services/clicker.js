@@ -87,17 +87,22 @@ function getTrajectoryPoints(startX, startY, targetX, targetY) {
 
 const clickQueues = new WeakMap();
 
-async function _clickerInternal(event, selector, index = null, maxRetries = 10) {
+async function _clickerInternal(event, selector, index, maxRetries = 10) {
   const webContents = event.sender;
-
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const script = `(async () => {
-        const el = ${index !== null ? `document.querySelectorAll(${JSON.stringify(selector)})[${index}]` : `document.querySelector(${JSON.stringify(selector)})`};
+        const sessionId = 'session_' + Math.random().toString(36).substring(2);
+        const el = document.querySelectorAll(${JSON.stringify(selector)})[${index}];
         if (!el) return null;
 
         el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
-        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+        
+        // 1. Двойной requestAnimationFrame с таймаутом (защита от зависания в фоне)
+        await Promise.race([
+          new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('RAF timeout')), 1000))
+        ]).catch(() => {});
 
         const r = el.getBoundingClientRect();
         if (r.width === 0 || r.height === 0) return null;
@@ -138,10 +143,8 @@ async function _clickerInternal(event, selector, index = null, maxRetries = 10) 
           currentTop = document.elementFromPoint(targetX, targetY);
         }
 
-        let isRestored = false;
-        window.__restorePointerEvents = () => {
-          if (isRestored) return;
-          isRestored = true;
+        // 2. Локальное замыкание вместо глобальной функции window.__restorePointerEvents
+        const restore = () => {
           for (let i = 0, len = modifiedElements.length; i < len; i++) {
             const item = modifiedElements[i];
             if (item && item.el) {
@@ -150,23 +153,27 @@ async function _clickerInternal(event, selector, index = null, maxRetries = 10) 
           }
         };
 
-        window.__lastClickSuccess = false;
-        const clickHandler = () => {
-          window.__lastClickSuccess = true;
-          try { el.removeEventListener('click', clickHandler); } catch(e) {}
-          if (window.__restorePointerEvents) window.__restorePointerEvents();
-        };
-        
-        try {
-          el.addEventListener('click', clickHandler, { once: true });
-        } catch(e) {}
+        // 3. Promise с событием и AbortController вместо поллинга window.__lastClickSuccess
+        const clickPromise = new Promise((resolve) => {
+          const controller = new AbortController();
+          const clickHandler = () => {
+            controller.abort();
+            resolve(true);
+          };
 
-        setTimeout(() => {
-          try { el.removeEventListener('click', clickHandler); } catch(e) {}
-          if (window.__restorePointerEvents) window.__restorePointerEvents();
-        }, 1500);
+          el.addEventListener('click', clickHandler, { once: true, signal: controller.signal });
 
-        return { x: r.x, y: r.y, width: r.width, height: r.height, targetX, targetY };
+          setTimeout(() => {
+            controller.abort();
+            resolve(false);
+          }, 1500);
+        });
+
+        // Сохраняем сессию в изолированном объекте страницы
+        window.__clickerSessions = window.__clickerSessions || {};
+        window.__clickerSessions[sessionId] = { restore, clickPromise };
+
+        return { sessionId, x: r.x, y: r.y, width: r.width, height: r.height, targetX, targetY };
       })()`;
 
       const rect = await webContents.executeJavaScript(script);
@@ -177,7 +184,7 @@ async function _clickerInternal(event, selector, index = null, maxRetries = 10) 
         continue;
       }
 
-      const { targetX, targetY } = rect;
+      const { sessionId, targetX, targetY } = rect;
       const pathPoints = getTrajectoryPoints(CONFIG.lastMousePosition.x, CONFIG.lastMousePosition.y, targetX, targetY);
 
       for (let i = 0, len = pathPoints.length; i < len; i++) {
@@ -202,9 +209,20 @@ async function _clickerInternal(event, selector, index = null, maxRetries = 10) 
       webContents.sendInputEvent({ type: "mouseUp", x: targetX, y: targetY, button: "left", clickCount: 1 });
       await sleep(80, 120);
 
-      const isClicked = await webContents.executeJavaScript(`window.__lastClickSuccess === true`).catch(() => false);
+      // Ожидание клика и гарантированное восстановление через try/finally на стороне страницы
+      const waitScript = `(async () => {
+        const session = window.__clickerSessions && window.__clickerSessions[${JSON.stringify(sessionId)}];
+        if (!session) return false;
 
-      webContents.executeJavaScript(`window.__restorePointerEvents && window.__restorePointerEvents()`).catch(() => {});
+        try {
+          return await session.clickPromise;
+        } finally {
+          session.restore();
+          delete window.__clickerSessions[${JSON.stringify(sessionId)}];
+        }
+      })()`;
+
+      const isClicked = await webContents.executeJavaScript(waitScript).catch(() => false);
 
       if (!isClicked) {
         await sleep(100, 300);
@@ -214,7 +232,20 @@ async function _clickerInternal(event, selector, index = null, maxRetries = 10) 
       return true;
     } catch (err) {
       console.error(`Ошибка в попытке ${attempt}:`, err);
-      webContents.executeJavaScript(`window.__restorePointerEvents && window.__restorePointerEvents()`).catch(() => {});
+      // Страховка от зависших оверлеев при сбоях
+      webContents
+        .executeJavaScript(
+          `
+        if (window.__clickerSessions) {
+          for (const id in window.__clickerSessions) {
+            try { window.__clickerSessions[id].restore(); } catch(e) {}
+            delete window.__clickerSessions[id];
+          }
+        }
+      `,
+        )
+        .catch(() => {});
+
       if (attempt === maxRetries) return false;
       await sleep(200, 400);
     }
@@ -222,18 +253,14 @@ async function _clickerInternal(event, selector, index = null, maxRetries = 10) 
 
   return false;
 }
-module.exports.clicker = async (event, selector, index = null, maxRetries = 10) => {
+
+module.exports.clicker = async (event, selector, index, maxRetries = 10) => {
   const webContents = event.sender;
 
-  // Получаем текущую очередь для этого webContents или создаем пустой промис
   let currentQueue = clickQueues.get(webContents) || Promise.resolve();
 
-  // Добавляем новый клик в конец цепочки
-  const nextQueueItem = currentQueue
-    .catch(() => {}) // Игнорируем ошибки предыдущих шагов, чтобы очередь не останавливалась
-    .then(() => _clickerInternal(event, selector, index, maxRetries));
+  const nextQueueItem = currentQueue.catch(() => {}).then(() => _clickerInternal(event, selector, index, maxRetries));
 
-  // Сохраняем обновленный промис очереди
   clickQueues.set(webContents, nextQueueItem);
 
   return nextQueueItem;
