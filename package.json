@@ -1,6 +1,6 @@
 {
   "name": "bot",
-  "version": "1.0.5",
+  "version": "1.0.7",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -14,8 +14,8 @@
     "javascript-obfuscator": "^5.9.0"
   },
   "build": {
-    "appId": "com.example.bot",
-    "productName": "LeagueHelper",
+    "appId": "com.yourcompany.liga17",
+    "productName": "Лига 17",
     "directories": {
       "output": "dist"
     },
@@ -39,7 +39,8 @@
     "win": {
       "target": [
         "nsis"
-      ]
+      ],
+      "icon": "icon.ico"
     },
     "nsis": {
       "oneClick": false,

@@ -5,7 +5,7 @@ const { initUpdater } = require("./services/updater.cjs");
 const { solveCaptcha } = require("./services/captcha.cjs");
 const { hotkey } = require("./services/hotkey.cjs");
 const { clicker } = require("./services/clicker.cjs");
-const { informer } = require("./services/inform.cjs");
+const { informer } = require("./services/notification.cjs");
 
 const User_ClearAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36";
 app.userAgentFallback = User_ClearAgent;
@@ -33,7 +33,7 @@ async function getBundleSource() {
 }
 
 app.whenReady().then(async () => {
-  app.setAppUserModelId("league17.helper");
+  app.setAppUserModelId("com.yourcompany.liga17");
   Menu.setApplicationMenu(null);
   powerBlockerId = powerSaveBlocker.start("prevent-app-suspension");
 
@@ -82,88 +82,88 @@ app.whenReady().then(async () => {
   win.webContents.on("did-finish-load", async () => {
     try {
       // 1. Внедряем отладочный Canvas Overlay + слушатели реальной мыши
-      await win.webContents.executeJavaScript(`
-      (() => {
-        if (window.__debugCanvas) return;
+      //   await win.webContents.executeJavaScript(`
+      //   (() => {
+      //     if (window.__debugCanvas) return;
 
-        const canvas = document.createElement('canvas');
-        canvas.id = 'automation-debug-canvas';
-        Object.assign(canvas.style, {
-          position: 'fixed',
-          top: '0',
-          left: '0',
-          width: '100vw',
-          height: '100vh',
-          pointerEvents: 'none',
-          zIndex: '2147483647',
-          opacity: '0.8'
-        });
+      //     const canvas = document.createElement('canvas');
+      //     canvas.id = 'automation-debug-canvas';
+      //     Object.assign(canvas.style, {
+      //       position: 'fixed',
+      //       top: '0',
+      //       left: '0',
+      //       width: '100vw',
+      //       height: '100vh',
+      //       pointerEvents: 'none',
+      //       zIndex: '2147483647',
+      //       opacity: '0.8'
+      //     });
 
-        const updateSize = () => {
-          canvas.width = window.innerWidth;
-          canvas.height = window.innerHeight;
-        };
-        updateSize();
-        window.addEventListener('resize', updateSize);
+      //     const updateSize = () => {
+      //       canvas.width = window.innerWidth;
+      //       canvas.height = window.innerHeight;
+      //     };
+      //     updateSize();
+      //     window.addEventListener('resize', updateSize);
 
-        (document.body || document.documentElement).appendChild(canvas);
+      //     (document.body || document.documentElement).appendChild(canvas);
 
-        const ctx = canvas.getContext('2d');
-        const points = [];
+      //     const ctx = canvas.getContext('2d');
+      //     const points = [];
 
-        window.__debugCanvas = {
-          addPoint(x, y, type = 'move') {
-            points.push({ x, y, type, time: Date.now() });
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            const now = Date.now();
-            // Оставляем точки за последние 3 секунды
-            const activePoints = points.filter(p => now - p.time < 3000);
+      //     window.__debugCanvas = {
+      //       addPoint(x, y, type = 'move') {
+      //         points.push({ x, y, type, time: Date.now() });
+      //         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            if (activePoints.length === 0) return;
+      //         const now = Date.now();
+      //         // Оставляем точки за последние 3 секунды
+      //         const activePoints = points.filter(p => now - p.time < 3000);
 
-            // Траектория (линия)
-            ctx.beginPath();
-            ctx.strokeStyle = 'rgba(0, 150, 255, 0.6)';
-            ctx.lineWidth = 2;
-            for (let i = 0; i < activePoints.length; i++) {
-              if (i === 0) ctx.moveTo(activePoints[i].x, activePoints[i].y);
-              else ctx.lineTo(activePoints[i].x, activePoints[i].y);
-            }
-            ctx.stroke();
+      //         if (activePoints.length === 0) return;
 
-            // Точки кликов и перемещений
-            for (const pt of activePoints) {
-              ctx.beginPath();
-              ctx.fillStyle = pt.type === 'click' ? '#ff0000' : '#00ff00';
-              ctx.arc(pt.x, pt.y, pt.type === 'click' ? 7 : 3, 0, Math.PI * 2);
-              ctx.fill();
-              ctx.lineWidth = 1;
-              ctx.strokeStyle = '#ffffff';
-              ctx.stroke();
-            }
-          }
-        };
+      //         // Траектория (линия)
+      //         ctx.beginPath();
+      //         ctx.strokeStyle = 'rgba(0, 150, 255, 0.6)';
+      //         ctx.lineWidth = 2;
+      //         for (let i = 0; i < activePoints.length; i++) {
+      //           if (i === 0) ctx.moveTo(activePoints[i].x, activePoints[i].y);
+      //           else ctx.lineTo(activePoints[i].x, activePoints[i].y);
+      //         }
+      //         ctx.stroke();
 
-        // --- ТЕЛЕМЕТРИЯ РЕАЛЬНОЙ МЫШИ ---
-        // Используем throttling для move, чтобы не перегружать отрисовку
-        // let lastMoveTime = 0;
-        // window.addEventListener('mousemove', (e) => {
-        //   const now = Date.now();
-        //   if (now - lastMoveTime > 25) { // Ограничиваем примерно до 40 кадров в секунду для производительности
-        //     window.__debugCanvas.addPoint(e.clientX, e.clientY, 'move');
-        //     lastMoveTime = now;
-        //   }
-        // }, { passive: true });
+      //         // Точки кликов и перемещений
+      //         for (const pt of activePoints) {
+      //           ctx.beginPath();
+      //           ctx.fillStyle = pt.type === 'click' ? '#ff0000' : '#00ff00';
+      //           ctx.arc(pt.x, pt.y, pt.type === 'click' ? 7 : 3, 0, Math.PI * 2);
+      //           ctx.fill();
+      //           ctx.lineWidth = 1;
+      //           ctx.strokeStyle = '#ffffff';
+      //           ctx.stroke();
+      //         }
+      //       }
+      //     };
 
-        // window.addEventListener('mousedown', (e) => {
-        //   window.__debugCanvas.addPoint(e.clientX, e.clientY, 'click');
-        // }, { passive: true });
-        // // ---------------------------------
+      //     // --- ТЕЛЕМЕТРИЯ РЕАЛЬНОЙ МЫШИ ---
+      //     // Используем throttling для move, чтобы не перегружать отрисовку
+      //     // let lastMoveTime = 0;
+      //     // window.addEventListener('mousemove', (e) => {
+      //     //   const now = Date.now();
+      //     //   if (now - lastMoveTime > 25) { // Ограничиваем примерно до 40 кадров в секунду для производительности
+      //     //     window.__debugCanvas.addPoint(e.clientX, e.clientY, 'move');
+      //     //     lastMoveTime = now;
+      //     //   }
+      //     // }, { passive: true });
 
-        console.log('[DebugCanvas] Инжектирован успешно с трекингом реальной мыши!');
-      })();
-    `);
+      //     // window.addEventListener('mousedown', (e) => {
+      //     //   window.__debugCanvas.addPoint(e.clientX, e.clientY, 'click');
+      //     // }, { passive: true });
+      //     // // ---------------------------------
+
+      //     console.log('[DebugCanvas] Инжектирован успешно с трекингом реальной мыши!');
+      //   })();
+      // `);
 
       // 2. Внедряем игровой бандл
       await win.webContents.executeJavaScript(bundleCode);

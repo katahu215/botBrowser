@@ -113,7 +113,7 @@ async function _clickerInternal(event, selector, index, maxRetries = 10) {
         const targetY = Math.round(r.y + paddingY + Math.random() * (r.height - 2 * paddingY));
 
         const modifiedElements = [];
-        const shadowOverlaySelectors = ['.modal-dialog', '.Modal', '.backdrop'];
+        const shadowOverlaySelectors = ['.modal-dialog', '.Modal', '.backdrop','.Drops'];
         
         const disableShadowOverlays = (root = document) => {
           const allElements = root.querySelectorAll('*');
