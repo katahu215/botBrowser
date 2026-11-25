@@ -1,51 +1,106 @@
 const { app, dialog } = require("electron");
-const electronUpdater = require("electron-updater");
+const { autoUpdater } = require("electron-updater");
 const log = require("electron-log");
-
-const { autoUpdater } = electronUpdater;
 
 autoUpdater.logger = log;
 autoUpdater.logger.transports.file.level = "info";
 
-autoUpdater.autoDownload = true;
+// Скачиваем только после подтверждения пользователем
+autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = true;
 
-module.exports.initUpdater = () => {
-  // Обновления работают только в собранном приложении
-  if (!app.isPackaged) {
-    log.info("Dev-режим: проверка обновлений пропущена");
-    return;
+let updaterInitialized = false;
+let isInstalling = false;
+let isPromptingDownload = false;
+let isPromptingInstall = false;
+let targetWindow = null;
+
+function getDialogParent() {
+  if (targetWindow && !targetWindow.isDestroyed()) {
+    return targetWindow;
+  }
+  return undefined;
+}
+
+module.exports.initUpdater = (win = null) => {
+  if (win) {
+    targetWindow = win;
   }
 
-  autoUpdater.checkForUpdatesAndNotify();
+  if (!app.isPackaged) return;
+  if (updaterInitialized) return;
+  updaterInitialized = true;
 
-  autoUpdater.on("update-available", (info) => {
-    log.info("Доступно обновление:", info.version);
-  });
+  autoUpdater.on("update-available", async (info) => {
+    if (isPromptingDownload || isInstalling) return;
+    isPromptingDownload = true;
 
-  autoUpdater.on("update-not-available", () => {
-    log.info("Обновлений нет");
-  });
+    try {
+      const parent = getDialogParent();
+      const options = {
+        type: "info",
+        title: "Доступно обновление",
+        message: `Найдена версия ${info.version}.`,
+        detail: "Скачать обновление сейчас?",
+        buttons: ["Скачать", "Не сейчас"],
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true,
+      };
 
-  autoUpdater.on("error", (err) => {
-    log.error("Ошибка обновления:", err);
-  });
+      const { response } = parent ? await dialog.showMessageBox(parent, options) : await dialog.showMessageBox(options);
 
-  autoUpdater.on("download-progress", (p) => {
-    log.info(`Загрузка: ${p.percent.toFixed(1)}%`);
+      if (response === 0) {
+        autoUpdater.downloadUpdate().catch((err) => {
+          log.error("downloadUpdate failed:", err);
+        });
+      }
+    } catch (err) {
+      log.error("Download dialog error:", err);
+    } finally {
+      isPromptingDownload = false;
+    }
   });
 
   autoUpdater.on("update-downloaded", async (info) => {
-    log.info("Обновление загружено:", info.version);
-    const { response } = await dialog.showMessageBox({
-      type: "info",
-      title: "Обновление готово",
-      message: `Версия ${info.version} загружена.`,
-      detail: "Перезапустить приложение сейчас, чтобы применить обновление?",
-      buttons: ["Перезапустить", "Позже"],
-      defaultId: 0,
-      cancelId: 1,
-    });
-    if (response === 0) autoUpdater.quitAndInstall();
+    if (isPromptingInstall || isInstalling) return;
+    isPromptingInstall = true;
+
+    try {
+      const parent = getDialogParent();
+      const options = {
+        type: "info",
+        title: "Обновление готово",
+        message: `Версия ${info.version} загружена.`,
+        detail: "Перезапустить приложение сейчас, чтобы установить обновление?",
+        buttons: ["Перезапустить", "Позже"],
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true,
+      };
+
+      const { response } = parent ? await dialog.showMessageBox(parent, options) : await dialog.showMessageBox(options);
+
+      if (response === 0) {
+        isInstalling = true;
+        setImmediate(() => {
+          autoUpdater.quitAndInstall(false, true);
+        });
+      }
+    } catch (err) {
+      log.error("Install dialog error:", err);
+    } finally {
+      isPromptingInstall = false;
+    }
   });
+
+  autoUpdater.on("error", (err) => {
+    log.error("AutoUpdater error:", err);
+  });
+
+  setTimeout(() => {
+    autoUpdater.checkForUpdates().catch((err) => {
+      log.error("checkForUpdates failed:", err);
+    });
+  }, 3000);
 };

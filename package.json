@@ -1,6 +1,6 @@
 {
-  "name": "bot",
-  "version": "1.0.7",
+  "name": "League17",
+  "version": "1.0.8",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -32,8 +32,10 @@
     ],
     "publish": [
       {
-        "provider": "generic",
-        "url": "https://pbhelperskatan.duckdns.org:8443/bot/"
+        "provider": "github",
+        "owner": "katahu215",
+        "repo": "botBrowser",
+        "releaseType": "draft"
       }
     ],
     "win": {
@@ -44,6 +46,7 @@
     },
     "nsis": {
       "oneClick": false,
+      "allowElevation": true,
       "allowToChangeInstallationDirectory": true
     }
   },

@@ -31,13 +31,10 @@ async function getBundleSource() {
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.text();
 }
-
 app.whenReady().then(async () => {
   app.setAppUserModelId("com.yourcompany.liga17");
   Menu.setApplicationMenu(null);
   powerBlockerId = powerSaveBlocker.start("prevent-app-suspension");
-
-  initUpdater();
 
   let bundleCode = null;
   try {
@@ -60,6 +57,8 @@ app.whenReady().then(async () => {
       backgroundThrottling: false,
     },
   });
+
+  initUpdater();
 
   session.defaultSession.setUserAgent(User_ClearAgent);
   session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
